@@ -7,18 +7,19 @@ const Hero = () => {
   const [activeFilter, setActiveFilter] = useState('all');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
+  const [deleteConfirmation, setDeleteConfirmation] = useState({ show: false, id: null, name: '' });
   const itemsPerPage = 10;
   
   // Default data - same for server and client
   const defaultData = [
     { id: 1, name: 'ERS Alorica', platform: 'Windows', version: '2.1.0', status: 'Active', lastUpdate: '2024-12-19' },
-    { id: 2, name: 'ERS Alorica iOS', platform: 'iOS', version: '1.8.2', status: 'Active', lastUpdate: '2024-12-19' },
+    { id: 2, name: 'ERS Alorica macOS', platform: 'macOS', version: '1.8.2', status: 'Active', lastUpdate: '2024-12-19' },
     { id: 3, name: 'ERS Concentrix Linux', platform: 'Linux', version: '3.0.1', status: 'Active', lastUpdate: '2024-12-19' },
     { id: 4, name: 'ERS Concentrix', platform: 'Windows', version: '2.0.5', status: 'Inactive', lastUpdate: '2024-12-19' },
-    { id: 5, name: 'ERS Concentrix iOS', platform: 'iOS', version: '1.9.0', status: 'Active', lastUpdate: '2024-12-19' },
+    { id: 5, name: 'ERS Concentrix macOS', platform: 'macOS', version: '1.9.0', status: 'Active', lastUpdate: '2024-12-19' },
     { id: 6, name: 'ERS Teleperformance Linux', platform: 'Linux', version: '2.9.8', status: 'Active', lastUpdate: '2024-12-19' },
     { id: 7, name: 'ERS Teleperformance', platform: 'Windows', version: '2.2.0', status: 'Active', lastUpdate: '2024-12-19' },
-    { id: 8, name: 'ERS Teleperformance iOS', platform: 'iOS', version: '1.7.5', status: 'Inactive', lastUpdate: '2024-12-19' },
+    { id: 8, name: 'ERS Teleperformance macOS', platform: 'macOS', version: '1.7.5', status: 'Inactive', lastUpdate: '2024-12-19' },
     { id: 9, name: 'ERS Alorica Linux', platform: 'Linux', version: '3.1.2', status: 'Active', lastUpdate: '2024-12-19' },
   ];
 
@@ -98,6 +99,29 @@ const Hero = () => {
     setCurrentPage(1); // Reset to first page after adding
   };
 
+  // Function to handle deleting an application
+  const handleDeleteApplication = (id, name) => {
+    setDeleteConfirmation({ show: true, id, name });
+  };
+
+  const confirmDelete = () => {
+    const updatedData = tableData.filter(item => item.id !== deleteConfirmation.id);
+    setTableData(updatedData);
+    saveToLocalStorage(updatedData);
+    
+    // Adjust current page if needed
+    const newTotalPages = Math.ceil(updatedData.length / itemsPerPage);
+    if (currentPage > newTotalPages && newTotalPages > 0) {
+      setCurrentPage(newTotalPages);
+    }
+    
+    setDeleteConfirmation({ show: false, id: null, name: '' });
+  };
+
+  const cancelDelete = () => {
+    setDeleteConfirmation({ show: false, id: null, name: '' });
+  };
+
   // Pagination navigation functions
   const goToPage = (page) => {
     setCurrentPage(page);
@@ -154,14 +178,14 @@ const Hero = () => {
               Windows
             </button>
             <button 
-              onClick={() => setActiveFilter('iOS')}
+              onClick={() => setActiveFilter('macOS')}
               className={`px-6 py-3 rounded-lg font-semibold transition-all duration-200 ${
-                activeFilter === 'iOS' 
+                activeFilter === 'macOS' 
                   ? 'bg-gray-800 text-white shadow-lg' 
                   : 'bg-white text-gray-800 border-2 border-gray-400 hover:border-gray-600'
               }`}
             >
-              iOS
+              macOS
             </button>
             <button 
               onClick={() => setActiveFilter('Linux')}
@@ -197,6 +221,7 @@ const Hero = () => {
                   <th className="px-6 py-4 text-center text-sm font-semibold text-gray-700 uppercase tracking-wider">Platform</th>
                   <th className="px-6 py-4 text-center text-sm font-semibold text-gray-700 uppercase tracking-wider">Version</th>
                   <th className="px-6 py-4 text-center text-sm font-semibold text-gray-700 uppercase tracking-wider">Last Update</th>
+                  <th className="px-6 py-4 text-center text-sm font-semibold text-gray-700 uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
@@ -207,7 +232,7 @@ const Hero = () => {
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className={`inline-flex px-3 py-1 text-xs font-semibold rounded-full ${
                         item.platform === 'Windows' ? 'bg-blue-100 text-blue-800' :
-                        item.platform === 'iOS' ? 'bg-gray-100 text-gray-800' :
+                        item.platform === 'macOS' ? 'bg-gray-100 text-gray-800' :
                         'bg-orange-100 text-orange-800'
                       }`}>
                         {item.platform}
@@ -215,6 +240,15 @@ const Hero = () => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.version}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{item.lastUpdate}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      <button
+                        onClick={() => handleDeleteApplication(item.id, item.name)}
+                        className="bg-red-500 hover:bg-red-600 text-white text-xs font-semibold py-1 px-2 rounded transition-colors duration-200"
+                        title="Delete"
+                      >
+                        Delete
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -263,6 +297,32 @@ const Hero = () => {
           onClose={() => setIsAddModalOpen(false)}
           onAdd={handleAddApplication}
         />
+
+        {/* Delete Confirmation Modal */}
+        {deleteConfirmation.show && (
+          <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50">
+            <div className="bg-white/95 backdrop-blur-md rounded-lg p-6 w-80 max-w-sm shadow-2xl border border-white/20">
+              <h3 className="text-lg font-bold text-gray-800 mb-4">Confirm Deletion</h3>
+              <p className="text-gray-700 mb-6">
+                Are you sure you want to delete "{deleteConfirmation.name}"? This action cannot be undone.
+              </p>
+              <div className="flex justify-end gap-2">
+                <button
+                  onClick={confirmDelete}
+                  className="bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors duration-200 shadow-lg hover:shadow-xl"
+                >
+                  Delete
+                </button>
+                <button
+                  onClick={cancelDelete}
+                  className="bg-gray-300 hover:bg-gray-400 text-gray-800 font-semibold py-2 px-4 rounded-lg transition-colors duration-200 shadow-lg hover:shadow-xl"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </section>
   );

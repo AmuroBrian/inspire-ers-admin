@@ -6,8 +6,9 @@ const AddModal = ({ isOpen, onClose, onAdd }) => {
   const [selectedPlatform, setSelectedPlatform] = useState('');
   const [selectedVersion, setSelectedVersion] = useState('');
   const [selectedFile, setSelectedFile] = useState(null);
+  const [showConfirmation, setShowConfirmation] = useState(false);
 
-  const platforms = ['Windows', 'iOS', 'Linux'];
+  const platforms = ['Windows', 'macOS', 'Linux'];
   const versions = ['v1', 'v2', 'v3', 'v4', 'v5', 'v6', 'v7', 'v8', 'v9'];
 
   const getTodayDate = () => {
@@ -25,18 +26,27 @@ const AddModal = ({ isOpen, onClose, onAdd }) => {
 
   const handleSubmit = () => {
     if (selectedPlatform && selectedVersion) {
-      onAdd({
-        platform: selectedPlatform,
-        version: selectedVersion,
-        lastUpdate: getTodayDate(),
-        fileName: selectedFile ? selectedFile.name : null,
-        fileSize: selectedFile ? selectedFile.size : null
-      });
-      setSelectedPlatform('');
-      setSelectedVersion('');
-      setSelectedFile(null);
-      onClose();
+      setShowConfirmation(true);
     }
+  };
+
+  const confirmAdd = () => {
+    onAdd({
+      platform: selectedPlatform,
+      version: selectedVersion,
+      lastUpdate: getTodayDate(),
+      fileName: selectedFile ? selectedFile.name : null,
+      fileSize: selectedFile ? selectedFile.size : null
+    });
+    setSelectedPlatform('');
+    setSelectedVersion('');
+    setSelectedFile(null);
+    setShowConfirmation(false);
+    onClose();
+  };
+
+  const cancelConfirmation = () => {
+    setShowConfirmation(false);
   };
 
   if (!isOpen) return null;
@@ -159,6 +169,49 @@ const AddModal = ({ isOpen, onClose, onAdd }) => {
             Add Application
           </button>
         </div>
+
+        {/* Confirmation Dialog */}
+        {showConfirmation && (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-60">
+            <div className="bg-white rounded-lg p-6 w-80 max-w-sm shadow-2xl border border-gray-200">
+              <div className="text-center mb-4">
+                <div className="text-4xl mb-2">🤔</div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">Confirm Application</h3>
+                <p className="text-sm text-gray-600">
+                  Are you sure you want to add this application?
+                </p>
+              </div>
+              
+              <div className="bg-gray-50 rounded-lg p-3 mb-4 text-sm">
+                <div className="grid grid-cols-2 gap-2 text-left">
+                  <span className="font-medium text-gray-700">Platform:</span>
+                  <span className="text-gray-900">{selectedPlatform}</span>
+                  <span className="font-medium text-gray-700">Version:</span>
+                  <span className="text-gray-900">{selectedVersion}</span>
+                  <span className="font-medium text-gray-700">File:</span>
+                  <span className="text-gray-900">{selectedFile ? selectedFile.name : 'No file selected'}</span>
+                  <span className="font-medium text-gray-700">Date:</span>
+                  <span className="text-gray-900">{getTodayDate()}</span>
+                </div>
+              </div>
+
+              <div className="flex justify-end space-x-3">
+                <button
+                  onClick={cancelConfirmation}
+                  className="px-4 py-2 text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300 transition-colors duration-200"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={confirmAdd}
+                  className="px-4 py-2 text-white bg-green-600 rounded-md hover:bg-green-700 transition-colors duration-200"
+                >
+                  Confirm Add
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

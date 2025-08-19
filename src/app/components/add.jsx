@@ -30,15 +30,18 @@ const AddModal = ({ isOpen, onClose, onAdd }) => {
     setSelectedFile(file);
   };
 
-  const handleSubmit = async () => {
-    setError('');
+  const handleSubmit = () => {
     if (!selectedPlatform || !selectedVersion || !selectedFile) {
       setError('All fields are required.');
       return;
     }
+    setError('');
+    setShowConfirmation(true);
+  };
 
+  const confirmAdd = async () => {
+    setError('');
     try {
-      // Format: ERS-[Platform]-[Version]
       const appName = `ERS-${selectedPlatform}-${selectedVersion}`;
       const fileExt = selectedFile.name.split('.').pop();
       const newFileName = `${appName}.${fileExt}`;
@@ -46,7 +49,6 @@ const AddModal = ({ isOpen, onClose, onAdd }) => {
         storage,
         `installer-versions/${selectedPlatform.toLowerCase()}/${newFileName}`
       );
-      // Create a new File object with the new name
       const renamedFile = new File([selectedFile], newFileName, { type: selectedFile.type });
       await uploadBytes(storageRef, renamedFile);
       const fileUrl = await getDownloadURL(storageRef);
@@ -64,12 +66,18 @@ const AddModal = ({ isOpen, onClose, onAdd }) => {
       setSelectedPlatform('');
       setSelectedVersion('');
       setSelectedFile(null);
+      setShowConfirmation(false);
       setError('');
       onClose();
     } catch (err) {
       setError('Failed to upload. Please try again.');
+      setShowConfirmation(false);
       console.error(err);
     }
+  };
+
+  const cancelConfirmation = () => {
+    setShowConfirmation(false);
   };
 
   useEffect(() => {
@@ -226,7 +234,6 @@ const AddModal = ({ isOpen, onClose, onAdd }) => {
                   Are you sure you want to add this application?
                 </p>
               </div>
-              
               <div className="bg-gray-50 rounded-lg p-3 mb-4 text-sm">
                 <div className="grid grid-cols-2 gap-2 text-left">
                   <span className="font-medium text-gray-700">Platform:</span>
@@ -239,7 +246,6 @@ const AddModal = ({ isOpen, onClose, onAdd }) => {
                   <span className="text-gray-900">{getTodayDate()}</span>
                 </div>
               </div>
-
               <div className="flex justify-end space-x-3">
                 <button
                   onClick={cancelConfirmation}

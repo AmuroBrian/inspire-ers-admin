@@ -2,8 +2,9 @@
 
 import React, { useState, useEffect } from 'react';
 import AddModal from './add';
-import { collection, getDocs, addDoc } from "firebase/firestore";
-import { db } from '@/firebase/firebaseConfig';
+import { collection, getDocs, addDoc, doc, deleteDoc } from "firebase/firestore";
+import { ref, deleteObject } from "firebase/storage";
+import { db, storage } from '@/firebase/firebaseConfig';
 
 const Hero = () => {
   const [activeFilter, setActiveFilter] = useState('all');
@@ -118,26 +119,42 @@ const Hero = () => {
   };
 
   // Function to handle deleting an application
-  const handleDeleteApplication = (id, name) => {
-    setDeleteConfirmation({ show: true, id, name });
+  const handleDeleteApplication = (item) => {
+    setDeleteConfirmation({ show: true, item });
   };
 
-  const confirmDelete = () => {
-    const updatedData = tableData.filter(item => item.id !== deleteConfirmation.id);
-    setTableData(updatedData);
-    saveToLocalStorage(updatedData);
-    
-    // Adjust current page if needed
-    const newTotalPages = Math.ceil(updatedData.length / itemsPerPage);
-    if (currentPage > newTotalPages && newTotalPages > 0) {
-      setCurrentPage(newTotalPages);
+  const confirmDelete = async () => {
+    const { item } = deleteConfirmation;
+    try {
+      // Delete from Storage if fileName and platform exist
+      if (item?.platform && item?.fileName) {
+        const fileRef = ref(
+          storage,
+          `installer-versions/${item.platform.toLowerCase()}/${item.fileName}`
+        );
+        await deleteObject(fileRef).catch(() => {}); // Ignore if file doesn't exist
+      }
+      // Delete from Firestore
+      await deleteDoc(doc(db, "installers", item.id));
+      // Update local state
+      const updatedData = tableData.filter((i) => i.id !== item.id);
+      setTableData(updatedData);
+      saveToLocalStorage(updatedData);
+
+      // Adjust current page if needed
+      const newTotalPages = Math.ceil(updatedData.length / itemsPerPage);
+      if (currentPage > newTotalPages && newTotalPages > 0) {
+        setCurrentPage(newTotalPages);
+      }
+    } catch (error) {
+      console.error("Failed to delete application:", error);
+      // Optionally show error to user
     }
-    
-    setDeleteConfirmation({ show: false, id: null, name: '' });
+    setDeleteConfirmation({ show: false, item: null });
   };
 
   const cancelDelete = () => {
-    setDeleteConfirmation({ show: false, id: null, name: '' });
+    setDeleteConfirmation({ show: false, item: null });
   };
 
   // Pagination navigation functions
@@ -260,7 +277,7 @@ const Hero = () => {
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{item.lastUpdate}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       <button
-                        onClick={() => handleDeleteApplication(item.id, item.name)}
+                        onClick={() => handleDeleteApplication(item)}
                         className="bg-red-500 hover:bg-red-600 text-white text-xs font-semibold py-1 px-2 rounded transition-colors duration-200"
                         title="Delete"
                       >
@@ -322,7 +339,7 @@ const Hero = () => {
             <div className="bg-white/95 backdrop-blur-md rounded-lg p-6 w-80 max-w-sm shadow-2xl border border-white/20">
               <h3 className="text-lg font-bold text-gray-800 mb-4">Confirm Deletion</h3>
               <p className="text-gray-700 mb-6">
-                Are you sure you want to delete "{deleteConfirmation.name}"? This action cannot be undone.
+                Are you sure you want to delete "{deleteConfirmation.item?.name}"? This action cannot be undone.
               </p>
               <div className="flex justify-end gap-2">
                 <button

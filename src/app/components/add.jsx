@@ -10,6 +10,7 @@ const AddModal = ({ isOpen, onClose, onAdd }) => {
   const [selectedPlatform, setSelectedPlatform] = useState('');
   const [selectedVersion, setSelectedVersion] = useState('');
   const [selectedFile, setSelectedFile] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
   const [tableData, setTableData] = useState([]);
   const [error, setError] = useState('');
   const [showConfirmation, setShowConfirmation] = useState(false);
@@ -40,40 +41,24 @@ const AddModal = ({ isOpen, onClose, onAdd }) => {
   };
 
   const confirmAdd = async () => {
-    setError('');
-    try {
-      const appName = `ERS-${selectedPlatform}-${selectedVersion}`;
-      const fileExt = selectedFile.name.split('.').pop();
-      const newFileName = `${appName}.${fileExt}`;
-      const storageRef = ref(
-        storage,
-        `installer-versions/${selectedPlatform.toLowerCase()}/${newFileName}`
-      );
-      const renamedFile = new File([selectedFile], newFileName, { type: selectedFile.type });
-      await uploadBytes(storageRef, renamedFile);
-      const fileUrl = await getDownloadURL(storageRef);
-
-      onAdd({
-        name: appName,
-        platform: selectedPlatform,
-        version: selectedVersion,
-        lastUpdate: getTodayDate(),
-        fileName: newFileName,
-        fileSize: selectedFile.size,
-        fileUrl: fileUrl
-      });
-
-      setSelectedPlatform('');
-      setSelectedVersion('');
-      setSelectedFile(null);
-      setShowConfirmation(false);
-      setError('');
-      onClose();
-    } catch (err) {
-      setError('Failed to upload. Please try again.');
-      setShowConfirmation(false);
-      console.error(err);
-    }
+    setIsLoading(true);
+    
+    // Simulate loading time
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    
+    onAdd({
+      platform: selectedPlatform,
+      version: selectedVersion,
+      lastUpdate: getTodayDate(),
+      fileName: selectedFile ? selectedFile.name : null,
+      fileSize: selectedFile ? selectedFile.size : null
+    });
+    
+    setSelectedPlatform('');
+    setSelectedVersion('');
+    setSelectedFile(null);
+    setIsLoading(false);
+    onClose();
   };
 
   const cancelConfirmation = () => {
@@ -255,9 +240,21 @@ const AddModal = ({ isOpen, onClose, onAdd }) => {
                 </button>
                 <button
                   onClick={confirmAdd}
-                  className="px-4 py-2 text-white bg-green-600 rounded-md hover:bg-green-700 transition-colors duration-200"
+                  disabled={isLoading}
+                  className={`px-4 py-2 text-white rounded-md transition-colors duration-200 ${
+                    isLoading
+                      ? 'bg-gray-400 cursor-not-allowed'
+                      : 'bg-green-600 hover:bg-green-700'
+                  }`}
                 >
-                  Confirm Add
+                  {isLoading ? (
+                    <div className="flex items-center justify-center">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                      Adding...
+                    </div>
+                  ) : (
+                    'Confirm Add'
+                  )}
                 </button>
               </div>
             </div>

@@ -2,9 +2,6 @@
 
 import React, { useState, useEffect } from 'react';
 import AddModal from './add';
-import { collection, getDocs, addDoc, doc, deleteDoc } from "firebase/firestore";
-import { ref, deleteObject } from "firebase/storage";
-import { db, storage } from '@/firebase/firebaseConfig';
 
 const Hero = () => {
   const [activeFilter, setActiveFilter] = useState('all');
@@ -28,6 +25,7 @@ const Hero = () => {
 
   const [tableData, setTableData] = useState(defaultData);
 
+  // Load data from localStorage after component mounts
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const savedData = localStorage.getItem('ersTableData');
@@ -41,25 +39,6 @@ const Hero = () => {
         }
       }
     }
-  }, []);
-
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const querySnapshot = await getDocs(collection(db, "installers"));
-        const data = [];
-        querySnapshot.forEach((doc) => {
-          data.push({ id: doc.id, ...doc.data() });
-        });
-        setTableData(data);
-        saveToLocalStorage(data);
-      } catch (error) {
-        console.error("Error fetching Firestore data:", error);
-        setTableData(defaultData);
-      }
-    };
-
-    fetchData();
   }, []);
 
   const filteredData = activeFilter === 'all' 
@@ -105,17 +84,12 @@ const Hero = () => {
   };
 
   // Function to handle adding new application
-  const handleAddApplication = async (newApp) => {
-    try {
-      const docRef = await addDoc(collection(db, "installers"), newApp);
-      const newApplication = { id: docRef.id, ...newApp };
-      const updatedData = [newApplication, ...tableData];
-      setTableData(updatedData);
-      saveToLocalStorage(updatedData);
-      setCurrentPage(1);
-    } catch (error) {
-      console.error("Error adding document: ", error);
-    }
+  const handleAddApplication = (newApp) => {
+    const newApplication = { id: Date.now(), ...newApp }; // Simple ID generation
+    const updatedData = [newApplication, ...tableData];
+    setTableData(updatedData);
+    saveToLocalStorage(updatedData);
+    setCurrentPage(1);
   };
 
   // Function to handle deleting an application
@@ -123,32 +97,16 @@ const Hero = () => {
     setDeleteConfirmation({ show: true, item });
   };
 
-  const confirmDelete = async () => {
+  const confirmDelete = () => {
     const { item } = deleteConfirmation;
-    try {
-      // Delete from Storage if fileName and platform exist
-      if (item?.platform && item?.fileName) {
-        const fileRef = ref(
-          storage,
-          `installer-versions/${item.platform.toLowerCase()}/${item.fileName}`
-        );
-        await deleteObject(fileRef).catch(() => {}); // Ignore if file doesn't exist
-      }
-      // Delete from Firestore
-      await deleteDoc(doc(db, "installers", item.id));
-      // Update local state
-      const updatedData = tableData.filter((i) => i.id !== item.id);
-      setTableData(updatedData);
-      saveToLocalStorage(updatedData);
+    const updatedData = tableData.filter((i) => i.id !== item.id);
+    setTableData(updatedData);
+    saveToLocalStorage(updatedData);
 
-      // Adjust current page if needed
-      const newTotalPages = Math.ceil(updatedData.length / itemsPerPage);
-      if (currentPage > newTotalPages && newTotalPages > 0) {
-        setCurrentPage(newTotalPages);
-      }
-    } catch (error) {
-      console.error("Failed to delete application:", error);
-      // Optionally show error to user
+    // Adjust current page if needed
+    const newTotalPages = Math.ceil(updatedData.length / itemsPerPage);
+    if (currentPage > newTotalPages && newTotalPages > 0) {
+      setCurrentPage(newTotalPages);
     }
     setDeleteConfirmation({ show: false, item: null });
   };
@@ -175,7 +133,7 @@ const Hero = () => {
   };
 
   return (
-    <section className="bg-gradient-to-br from-gray-50 via-gray-100 to-gray-200 py-32 px-4 min-h-screen flex items-center">
+    <section className="bg-gradient-to-br from-blue-50 via-blue-100 to-blue-200 py-32 px-4 min-h-screen flex items-center">
       <div className="max-w-7xl mx-auto text-center w-full">
         <div className="mb-16">
           <h1 className="text-5xl md:text-7xl font-bold text-gray-800 mb-8">
@@ -246,42 +204,61 @@ const Hero = () => {
         </div>
 
         {/* Large Table */}
-        <div className="bg-white rounded-xl shadow-xl overflow-hidden">
+        <div className="bg-white rounded-2xl shadow-2xl overflow-hidden border border-gray-100 w-full">
           <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50">
+            <table className="w-full min-w-full">
+              <thead className="bg-gradient-to-r from-blue-600 to-blue-700">
                 <tr>
-                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 uppercase tracking-wider">ID</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 uppercase tracking-wider">Application Name</th>
-                  <th className="px-6 py-4 text-center text-sm font-semibold text-gray-700 uppercase tracking-wider">Platform</th>
-                  <th className="px-6 py-4 text-center text-sm font-semibold text-gray-700 uppercase tracking-wider">Version</th>
-                  <th className="px-6 py-4 text-center text-sm font-semibold text-gray-700 uppercase tracking-wider">Last Update</th>
-                  <th className="px-6 py-4 text-center text-sm font-semibold text-gray-700 uppercase tracking-wider">Actions</th>
+                  <th className="px-4 py-4 text-left text-sm font-bold text-white uppercase tracking-wider border-b border-blue-500 w-40">ID</th>
+                  <th className="px-4 py-4 text-left text-sm font-bold text-white uppercase tracking-wider border-b border-blue-500 min-w-40">Application Name</th>
+                  <th className="px-4 py-4 text-center text-sm font-bold text-white uppercase tracking-wider border-b border-blue-500 w-28">Platform</th>
+                  <th className="px-4 py-4 text-center text-sm font-bold text-white uppercase tracking-wider border-b border-blue-500 w-20">Version</th>
+                  <th className="px-4 py-4 text-center text-sm font-bold text-white uppercase tracking-wider border-b border-blue-500 w-28">Last Update</th>
+                  <th className="px-4 py-4 text-center text-sm font-bold text-white uppercase tracking-wider border-b border-blue-500 w-24">Actions</th>
                 </tr>
               </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {currentData.map((item) => (
-                  <tr key={item.id} className="hover:bg-gray-50 transition-colors duration-150">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{item.id}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-semibold text-left">{item.name}</td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`inline-flex px-3 py-1 text-xs font-semibold rounded-full ${
-                        item.platform === 'Windows' ? 'bg-blue-100 text-blue-800' :
-                        item.platform === 'macOS' ? 'bg-gray-100 text-gray-800' :
-                        'bg-orange-100 text-orange-800'
+              <tbody className="bg-white divide-y divide-gray-100">
+                {currentData.map((item, index) => (
+                  <tr key={item.id} className={`hover:bg-blue-50 transition-colors duration-300 ${
+                    index % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'
+                  }`}>
+                    <td className="px-4 py-4 whitespace-nowrap">
+                      <span className="inline-flex items-center justify-center w-36 h-8 bg-gray-100 text-gray-800 text-xs font-bold rounded-full">
+                        {item.id}
+                      </span>
+                    </td>
+                    <td className="px-4 py-4 whitespace-nowrap">
+                      <div className="flex items-center">
+                        <div className="w-3 h-3 bg-green-400 rounded-full mr-3 animate-pulse"></div>
+                        <span className="text-sm font-semibold text-gray-900">{item.name}</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-4 whitespace-nowrap text-center">
+                      <span className={`inline-flex px-4 py-2 text-xs font-bold rounded-full shadow-sm ${
+                        item.platform === 'Windows' ? 'bg-blue-100 text-blue-800 border border-blue-200' :
+                        item.platform === 'macOS' ? 'bg-gray-100 text-gray-800 border border-gray-200' :
+                        'bg-orange-100 text-orange-800 border border-orange-200'
                       }`}>
                         {item.platform}
                       </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.version}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{item.lastUpdate}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <td className="px-4 py-4 whitespace-nowrap text-center">
+                      <span className="inline-flex px-3 py-1 text-sm font-semibold text-gray-700 bg-gray-100 rounded-lg border border-gray-200">
+                        {item.version}
+                      </span>
+                    </td>
+                    <td className="px-4 py-4 whitespace-nowrap text-center">
+                      <span className="text-sm text-gray-600 font-medium">
+                        {item.lastUpdate}
+                      </span>
+                    </td>
+                    <td className="px-4 py-4 whitespace-nowrap text-center">
                       <button
                         onClick={() => handleDeleteApplication(item)}
-                        className="bg-red-500 hover:bg-red-600 text-white text-xs font-semibold py-1 px-2 rounded transition-colors duration-200"
+                        className="bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white text-xs font-bold py-2 px-4 rounded-lg transition-all duration-200 shadow-lg hover:shadow-xl"
                         title="Delete"
                       >
-                        Delete
+                        🗑️ Delete
                       </button>
                     </td>
                   </tr>
@@ -313,16 +290,10 @@ const Hero = () => {
         </div>
 
         {/* Summary Stats */}
-        <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="mt-8 flex justify-center">
           <div className="bg-white/80 backdrop-blur-sm rounded-lg p-4 border border-gray-200">
             <div className="text-2xl font-bold text-gray-800">{filteredData.length}</div>
             <div className="text-sm text-gray-600">Total Applications</div>
-          </div>
-          <div className="bg-white/80 backdrop-blur-sm rounded-lg p-4 border border-gray-200">
-            <div className="text-2xl font-bold text-blue-600">
-              {filteredData.length}
-            </div>
-            <div className="text-sm text-gray-600">Applications</div>
           </div>
         </div>
 

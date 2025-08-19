@@ -1,11 +1,17 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { collection, getDocs } from "firebase/firestore";
+import { db } from '@/firebase/firebaseConfig';
+import { storage } from '@/firebase/firebaseConfig';
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 
 const AddModal = ({ isOpen, onClose, onAdd }) => {
   const [selectedPlatform, setSelectedPlatform] = useState('');
   const [selectedVersion, setSelectedVersion] = useState('');
   const [selectedFile, setSelectedFile] = useState(null);
+  const [tableData, setTableData] = useState([]);
+  const [error, setError] = useState('');
 
   const platforms = ['Windows', 'iOS', 'Linux'];
   const versions = ['v1', 'v2', 'v3', 'v4', 'v5', 'v6', 'v7', 'v8', 'v9'];
@@ -23,21 +29,64 @@ const AddModal = ({ isOpen, onClose, onAdd }) => {
     setSelectedFile(file);
   };
 
-  const handleSubmit = () => {
-    if (selectedPlatform && selectedVersion) {
+  const handleSubmit = async () => {
+    setError('');
+    if (!selectedPlatform || !selectedVersion || !selectedFile) {
+      setError('All fields are required.');
+      return;
+    }
+
+    try {
+      // Format: ERS-[Platform]-[Version]
+      const appName = `ERS-${selectedPlatform}-${selectedVersion}`;
+      const fileExt = selectedFile.name.split('.').pop();
+      const newFileName = `${appName}.${fileExt}`;
+      const storageRef = ref(
+        storage,
+        `installer-versions/${selectedPlatform.toLowerCase()}/${newFileName}`
+      );
+      // Create a new File object with the new name
+      const renamedFile = new File([selectedFile], newFileName, { type: selectedFile.type });
+      await uploadBytes(storageRef, renamedFile);
+      const fileUrl = await getDownloadURL(storageRef);
+
       onAdd({
+        name: appName,
         platform: selectedPlatform,
         version: selectedVersion,
         lastUpdate: getTodayDate(),
-        fileName: selectedFile ? selectedFile.name : null,
-        fileSize: selectedFile ? selectedFile.size : null
+        fileName: newFileName,
+        fileSize: selectedFile.size,
+        fileUrl: fileUrl
       });
+
       setSelectedPlatform('');
       setSelectedVersion('');
       setSelectedFile(null);
+      setError('');
       onClose();
+    } catch (err) {
+      setError('Failed to upload. Please try again.');
+      console.error(err);
     }
   };
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const querySnapshot = await getDocs(collection(db, "installers"));
+        const data = [];
+        querySnapshot.forEach((doc) => {
+          data.push({ id: doc.id, ...doc.data() });
+        });
+        setTableData(data);
+      } catch (error) {
+        console.error("Error fetching Firestore data:", error);
+      }
+    };
+
+    fetchData();
+  }, []);
 
   if (!isOpen) return null;
 
@@ -58,7 +107,7 @@ const AddModal = ({ isOpen, onClose, onAdd }) => {
           {/* Platform Dropdown */}
           <div>
             <label className="block text-sm font-medium text-black mb-2">
-              Platform
+              Platform <span className="text-red-500">*</span>
             </label>
             <select
               value={selectedPlatform}
@@ -77,7 +126,7 @@ const AddModal = ({ isOpen, onClose, onAdd }) => {
           {/* Version Dropdown */}
           <div>
             <label className="block text-sm font-medium text-black mb-2">
-              Version
+              Version <span className="text-red-500">*</span>
             </label>
             <select
               value={selectedVersion}
@@ -96,7 +145,7 @@ const AddModal = ({ isOpen, onClose, onAdd }) => {
           {/* File Upload */}
           <div>
             <label className="block text-sm font-medium text-black mb-2">
-              Upload Application File
+              Upload Application File <span className="text-red-500">*</span>
             </label>
             <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-blue-400 transition-colors duration-200">
               <input
@@ -137,6 +186,11 @@ const AddModal = ({ isOpen, onClose, onAdd }) => {
               {getTodayDate()}
             </div>
           </div>
+
+          {/* Error Message */}
+          {error && (
+            <div className="text-red-600 text-sm font-medium">{error}</div>
+          )}
         </div>
 
         {/* Action Buttons */}
@@ -149,9 +203,9 @@ const AddModal = ({ isOpen, onClose, onAdd }) => {
           </button>
           <button
             onClick={handleSubmit}
-            disabled={!selectedPlatform || !selectedVersion}
+            disabled={!selectedPlatform || !selectedVersion || !selectedFile}
             className={`px-4 py-2 text-white rounded-md transition-colors duration-200 ${
-              selectedPlatform && selectedVersion
+              selectedPlatform && selectedVersion && selectedFile
                 ? 'bg-blue-600 hover:bg-blue-700'
                 : 'bg-gray-400 cursor-not-allowed'
             }`}

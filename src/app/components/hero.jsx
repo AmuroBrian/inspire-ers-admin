@@ -2,6 +2,8 @@
 
 import React, { useState, useEffect } from 'react';
 import AddModal from './add';
+import { collection, getDocs, addDoc } from "firebase/firestore";
+import { db } from '@/firebase/firebaseConfig';
 
 const Hero = () => {
   const [activeFilter, setActiveFilter] = useState('all');
@@ -24,7 +26,6 @@ const Hero = () => {
 
   const [tableData, setTableData] = useState(defaultData);
 
-  // Load data from localStorage after component mounts
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const savedData = localStorage.getItem('ersTableData');
@@ -38,6 +39,25 @@ const Hero = () => {
         }
       }
     }
+  }, []);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const querySnapshot = await getDocs(collection(db, "installers"));
+        const data = [];
+        querySnapshot.forEach((doc) => {
+          data.push({ id: doc.id, ...doc.data() });
+        });
+        setTableData(data);
+        saveToLocalStorage(data);
+      } catch (error) {
+        console.error("Error fetching Firestore data:", error);
+        setTableData(defaultData);
+      }
+    };
+
+    fetchData();
   }, []);
 
   const filteredData = activeFilter === 'all' 
@@ -83,19 +103,17 @@ const Hero = () => {
   };
 
   // Function to handle adding new application
-  const handleAddApplication = (newApp) => {
-    const newId = Math.max(...tableData.map(item => item.id)) + 1;
-    const newApplication = {
-      id: newId,
-      name: `ERS ${newApp.platform} ${newApp.version}`,
-      platform: newApp.platform,
-      version: newApp.version,
-      lastUpdate: newApp.lastUpdate
-    };
-    const updatedData = [newApplication, ...tableData];
-    setTableData(updatedData);
-    saveToLocalStorage(updatedData);
-    setCurrentPage(1); // Reset to first page after adding
+  const handleAddApplication = async (newApp) => {
+    try {
+      const docRef = await addDoc(collection(db, "installers"), newApp);
+      const newApplication = { id: docRef.id, ...newApp };
+      const updatedData = [newApplication, ...tableData];
+      setTableData(updatedData);
+      saveToLocalStorage(updatedData);
+      setCurrentPage(1);
+    } catch (error) {
+      console.error("Error adding document: ", error);
+    }
   };
 
   // Pagination navigation functions
@@ -268,4 +286,4 @@ const Hero = () => {
   );
 };
 
-export default Hero; 
+export default Hero;

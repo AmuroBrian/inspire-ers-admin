@@ -14,6 +14,7 @@ const AddModal = ({ isOpen, onClose, onAdd }) => {
   const [tableData, setTableData] = useState([]);
   const [error, setError] = useState('');
   const [showConfirmation, setShowConfirmation] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
   const platforms = ['Windows', 'macOS', 'Linux'];
   const versions = ['v1', 'v2', 'v3', 'v4', 'v5', 'v6', 'v7', 'v8', 'v9'];
@@ -41,24 +42,46 @@ const AddModal = ({ isOpen, onClose, onAdd }) => {
   };
 
   const confirmAdd = async () => {
+
+    setError('');
     setIsLoading(true);
-    
-    // Simulate loading time
+
     await new Promise(resolve => setTimeout(resolve, 1500));
-    
-    onAdd({
-      platform: selectedPlatform,
-      version: selectedVersion,
-      lastUpdate: getTodayDate(),
-      fileName: selectedFile ? selectedFile.name : null,
-      fileSize: selectedFile ? selectedFile.size : null
-    });
-    
-    setSelectedPlatform('');
-    setSelectedVersion('');
-    setSelectedFile(null);
-    setIsLoading(false);
-    onClose();
+
+    try {
+      const appName = `ERS-${selectedPlatform}-${selectedVersion}`;
+      const fileExt = selectedFile.name.split('.').pop();
+      const newFileName = `${appName}.${fileExt}`;
+      const storageRef = ref(
+        storage,
+        `installer-versions/${selectedPlatform.toLowerCase()}/${newFileName}`
+      );
+      const renamedFile = new File([selectedFile], newFileName, { type: selectedFile.type });
+      await uploadBytes(storageRef, renamedFile);
+      const fileUrl = await getDownloadURL(storageRef);
+
+      onAdd({
+        name: appName,
+        platform: selectedPlatform,
+        version: selectedVersion,
+        lastUpdate: getTodayDate(),
+        fileName: newFileName,
+        fileSize: selectedFile.size,
+        fileUrl: fileUrl
+      });
+
+      setSelectedPlatform('');
+      setSelectedVersion('');
+      setSelectedFile(null);
+      setShowConfirmation(false);
+      setError('');
+      setIsLoading(false);
+      onClose();
+    } catch (err) {
+      setError('Failed to upload. Please try again.');
+      setShowConfirmation(false);
+      console.error(err);
+    }
   };
 
   const cancelConfirmation = () => {
@@ -248,10 +271,10 @@ const AddModal = ({ isOpen, onClose, onAdd }) => {
                   }`}
                 >
                   {isLoading ? (
-                    <div className="flex items-center justify-center">
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    <span className="flex items-center justify-center">
+                      <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></span>
                       Adding...
-                    </div>
+                    </span>
                   ) : (
                     'Confirm Add'
                   )}

@@ -11,17 +11,7 @@ const Hero = () => {
   const itemsPerPage = 10;
   
   // Default data - same for server and client
-  const defaultData = [
-    { id: 1, name: 'ERS Alorica', platform: 'Windows', version: '2.1.0', status: 'Active', lastUpdate: '2024-12-19' },
-    { id: 2, name: 'ERS Alorica macOS', platform: 'macOS', version: '1.8.2', status: 'Active', lastUpdate: '2024-12-19' },
-    { id: 3, name: 'ERS Concentrix Linux', platform: 'Linux', version: '3.0.1', status: 'Active', lastUpdate: '2024-12-19' },
-    { id: 4, name: 'ERS Concentrix', platform: 'Windows', version: '2.0.5', status: 'Inactive', lastUpdate: '2024-12-19' },
-    { id: 5, name: 'ERS Concentrix macOS', platform: 'macOS', version: '1.9.0', status: 'Active', lastUpdate: '2024-12-19' },
-    { id: 6, name: 'ERS Teleperformance Linux', platform: 'Linux', version: '2.9.8', status: 'Active', lastUpdate: '2024-12-19' },
-    { id: 7, name: 'ERS Teleperformance', platform: 'Windows', version: '2.2.0', status: 'Active', lastUpdate: '2024-12-19' },
-    { id: 8, name: 'ERS Teleperformance macOS', platform: 'macOS', version: '1.7.5', status: 'Inactive', lastUpdate: '2024-12-19' },
-    { id: 9, name: 'ERS Alorica Linux', platform: 'Linux', version: '3.1.2', status: 'Active', lastUpdate: '2024-12-19' },
-  ];
+  const defaultData = [];
 
   const [tableData, setTableData] = useState(defaultData);
 

@@ -2,38 +2,47 @@
 
 import React, { useState, useEffect } from 'react';
 import AddModal from './add';
-import { collection, getDocs, addDoc, deleteDoc, doc } from "firebase/firestore";
-import { db, storage } from '@/firebase/firebaseConfig';
-import { ref, deleteObject } from "firebase/storage";
 
 const Hero = () => {
   const [activeFilter, setActiveFilter] = useState('all');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
-  const [deleteConfirmation, setDeleteConfirmation] = useState({ show: false, item: null });
+  const [deleteConfirmation, setDeleteConfirmation] = useState({ show: false, id: null, name: '' });
   const itemsPerPage = 10;
-  const [tableData, setTableData] = useState([]);
+  
+  // Default data - same for server and client
+  const defaultData = [
+    { id: 1, name: 'ERS Alorica', platform: 'Windows', version: '2.1.0', status: 'Active', lastUpdate: '2024-12-19' },
+    { id: 2, name: 'ERS Alorica macOS', platform: 'macOS', version: '1.8.2', status: 'Active', lastUpdate: '2024-12-19' },
+    { id: 3, name: 'ERS Concentrix Linux', platform: 'Linux', version: '3.0.1', status: 'Active', lastUpdate: '2024-12-19' },
+    { id: 4, name: 'ERS Concentrix', platform: 'Windows', version: '2.0.5', status: 'Inactive', lastUpdate: '2024-12-19' },
+    { id: 5, name: 'ERS Concentrix macOS', platform: 'macOS', version: '1.9.0', status: 'Active', lastUpdate: '2024-12-19' },
+    { id: 6, name: 'ERS Teleperformance Linux', platform: 'Linux', version: '2.9.8', status: 'Active', lastUpdate: '2024-12-19' },
+    { id: 7, name: 'ERS Teleperformance', platform: 'Windows', version: '2.2.0', status: 'Active', lastUpdate: '2024-12-19' },
+    { id: 8, name: 'ERS Teleperformance macOS', platform: 'macOS', version: '1.7.5', status: 'Inactive', lastUpdate: '2024-12-19' },
+    { id: 9, name: 'ERS Alorica Linux', platform: 'Linux', version: '3.1.2', status: 'Active', lastUpdate: '2024-12-19' },
+  ];
 
-  // Fetch data from Firestore on mount
+  const [tableData, setTableData] = useState(defaultData);
+
+  // Load data from localStorage after component mounts
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const querySnapshot = await getDocs(collection(db, "installers"));
-        const data = [];
-        querySnapshot.forEach((docSnap) => {
-          data.push({ id: docSnap.id, ...docSnap.data() });
-        });
-        setTableData(data);
-      } catch (error) {
-        console.error('Error fetching Firestore data:', error);
-        setTableData([]);
+    if (typeof window !== 'undefined') {
+      const savedData = localStorage.getItem('ersTableData');
+      if (savedData) {
+        try {
+          const parsedData = JSON.parse(savedData);
+          setTableData(parsedData);
+        } catch (error) {
+          console.error('Error parsing localStorage data:', error);
+          setTableData(defaultData);
+        }
       }
-    };
-    fetchData();
+    }
   }, []);
 
-  const filteredData = activeFilter === 'all'
-    ? tableData
+  const filteredData = activeFilter === 'all' 
+    ? tableData 
     : tableData.filter(item => item.platform === activeFilter);
 
   // Pagination calculations
@@ -56,47 +65,48 @@ const Hero = () => {
     return `${year}-${month}-${day}`;
   };
 
-  // Function to handle adding new application (Firestore)
-  const handleAddApplication = async (newApp) => {
-    try {
-      const docRef = await addDoc(collection(db, "installers"), newApp);
-      const newApplication = { id: docRef.id, ...newApp };
-      setTableData(prev => [newApplication, ...prev]);
-      setCurrentPage(1);
-    } catch (error) {
-      console.error("Error adding document: ", error);
+  // Function to save data to localStorage
+  const saveToLocalStorage = (data) => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('ersTableData', JSON.stringify(data));
     }
   };
 
-  // Function to handle deleting an application (Firestore + Storage)
+  // Function to handle upload and update last update date
+  const handleUpload = (id) => {
+    const updatedData = tableData.map(item => 
+      item.id === id 
+        ? { ...item, lastUpdate: getTodayDate() }
+        : item
+    );
+    setTableData(updatedData);
+    saveToLocalStorage(updatedData);
+  };
+
+  // Function to handle adding new application
+  const handleAddApplication = (newApp) => {
+    const newApplication = { id: Date.now(), ...newApp }; // Simple ID generation
+    const updatedData = [newApplication, ...tableData];
+    setTableData(updatedData);
+    saveToLocalStorage(updatedData);
+    setCurrentPage(1);
+  };
+
+  // Function to handle deleting an application
   const handleDeleteApplication = (item) => {
     setDeleteConfirmation({ show: true, item });
   };
 
-  const confirmDelete = async () => {
+  const confirmDelete = () => {
     const { item } = deleteConfirmation;
-    try {
-      // Delete from Storage if fileName and platform exist
-      if (item?.platform && item?.fileName) {
-        const fileRef = ref(
-          storage,
-          `installer-versions/${item.platform.toLowerCase()}/${item.fileName}`
-        );
-        await deleteObject(fileRef).catch(() => {});
-      }
-      // Delete from Firestore
-      await deleteDoc(doc(db, "installers", item.id));
-      // Update local state
-      const updatedData = tableData.filter((i) => i.id !== item.id);
-      setTableData(updatedData);
+    const updatedData = tableData.filter((i) => i.id !== item.id);
+    setTableData(updatedData);
+    saveToLocalStorage(updatedData);
 
-      // Adjust current page if needed
-      const newTotalPages = Math.ceil(updatedData.length / itemsPerPage);
-      if (currentPage > newTotalPages && newTotalPages > 0) {
-        setCurrentPage(newTotalPages);
-      }
-    } catch (error) {
-      console.error("Failed to delete application:", error);
+    // Adjust current page if needed
+    const newTotalPages = Math.ceil(updatedData.length / itemsPerPage);
+    if (currentPage > newTotalPages && newTotalPages > 0) {
+      setCurrentPage(newTotalPages);
     }
     setDeleteConfirmation({ show: false, item: null });
   };

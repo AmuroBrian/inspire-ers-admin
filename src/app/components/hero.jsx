@@ -2,37 +2,38 @@
 
 import React, { useState, useEffect } from 'react';
 import AddModal from './add';
+import { collection, getDocs, addDoc, deleteDoc, doc } from "firebase/firestore";
+import { db, storage } from '@/firebase/firebaseConfig';
+import { ref, deleteObject } from "firebase/storage";
 
 const Hero = () => {
   const [activeFilter, setActiveFilter] = useState('all');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
-  const [deleteConfirmation, setDeleteConfirmation] = useState({ show: false, id: null, name: '' });
+  const [deleteConfirmation, setDeleteConfirmation] = useState({ show: false, item: null });
   const itemsPerPage = 10;
-  
-  // Default data - same for server and client
-  const defaultData = [];
+  const [tableData, setTableData] = useState([]);
 
-  const [tableData, setTableData] = useState(defaultData);
-
-  // Load data from localStorage after component mounts
+  // Fetch data from Firestore on mount
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const savedData = localStorage.getItem('ersTableData');
-      if (savedData) {
-        try {
-          const parsedData = JSON.parse(savedData);
-          setTableData(parsedData);
-        } catch (error) {
-          console.error('Error parsing localStorage data:', error);
-          setTableData(defaultData);
-        }
+    const fetchData = async () => {
+      try {
+        const querySnapshot = await getDocs(collection(db, "installers"));
+        const data = [];
+        querySnapshot.forEach((docSnap) => {
+          data.push({ id: docSnap.id, ...docSnap.data() });
+        });
+        setTableData(data);
+      } catch (error) {
+        console.error('Error fetching Firestore data:', error);
+        setTableData([]);
       }
-    }
+    };
+    fetchData();
   }, []);
 
-  const filteredData = activeFilter === 'all' 
-    ? tableData 
+  const filteredData = activeFilter === 'all'
+    ? tableData
     : tableData.filter(item => item.platform === activeFilter);
 
   // Pagination calculations
@@ -55,48 +56,47 @@ const Hero = () => {
     return `${year}-${month}-${day}`;
   };
 
-  // Function to save data to localStorage
-  const saveToLocalStorage = (data) => {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('ersTableData', JSON.stringify(data));
+  // Function to handle adding new application (Firestore)
+  const handleAddApplication = async (newApp) => {
+    try {
+      const docRef = await addDoc(collection(db, "installers"), newApp);
+      const newApplication = { id: docRef.id, ...newApp };
+      setTableData(prev => [newApplication, ...prev]);
+      setCurrentPage(1);
+    } catch (error) {
+      console.error("Error adding document: ", error);
     }
   };
 
-  // Function to handle upload and update last update date
-  const handleUpload = (id) => {
-    const updatedData = tableData.map(item => 
-      item.id === id 
-        ? { ...item, lastUpdate: getTodayDate() }
-        : item
-    );
-    setTableData(updatedData);
-    saveToLocalStorage(updatedData);
-  };
-
-  // Function to handle adding new application
-  const handleAddApplication = (newApp) => {
-    const newApplication = { id: Date.now(), ...newApp }; // Simple ID generation
-    const updatedData = [newApplication, ...tableData];
-    setTableData(updatedData);
-    saveToLocalStorage(updatedData);
-    setCurrentPage(1);
-  };
-
-  // Function to handle deleting an application
+  // Function to handle deleting an application (Firestore + Storage)
   const handleDeleteApplication = (item) => {
     setDeleteConfirmation({ show: true, item });
   };
 
-  const confirmDelete = () => {
+  const confirmDelete = async () => {
     const { item } = deleteConfirmation;
-    const updatedData = tableData.filter((i) => i.id !== item.id);
-    setTableData(updatedData);
-    saveToLocalStorage(updatedData);
+    try {
+      // Delete from Storage if fileName and platform exist
+      if (item?.platform && item?.fileName) {
+        const fileRef = ref(
+          storage,
+          `installer-versions/${item.platform.toLowerCase()}/${item.fileName}`
+        );
+        await deleteObject(fileRef).catch(() => {});
+      }
+      // Delete from Firestore
+      await deleteDoc(doc(db, "installers", item.id));
+      // Update local state
+      const updatedData = tableData.filter((i) => i.id !== item.id);
+      setTableData(updatedData);
 
-    // Adjust current page if needed
-    const newTotalPages = Math.ceil(updatedData.length / itemsPerPage);
-    if (currentPage > newTotalPages && newTotalPages > 0) {
-      setCurrentPage(newTotalPages);
+      // Adjust current page if needed
+      const newTotalPages = Math.ceil(updatedData.length / itemsPerPage);
+      if (currentPage > newTotalPages && newTotalPages > 0) {
+        setCurrentPage(newTotalPages);
+      }
+    } catch (error) {
+      console.error("Failed to delete application:", error);
     }
     setDeleteConfirmation({ show: false, item: null });
   };

@@ -13,6 +13,7 @@ const AddModal = ({ isOpen, onClose, onAdd }) => {
   const [tableData, setTableData] = useState([]);
   const [error, setError] = useState('');
   const [showConfirmation, setShowConfirmation] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
   const platforms = ['Windows', 'macOS', 'Linux'];
   const versions = ['v1', 'v2', 'v3', 'v4', 'v5', 'v6', 'v7', 'v8', 'v9'];
@@ -40,7 +41,12 @@ const AddModal = ({ isOpen, onClose, onAdd }) => {
   };
 
   const confirmAdd = async () => {
+
     setError('');
+    setIsLoading(true);
+
+    await new Promise(resolve => setTimeout(resolve, 1500));
+
     try {
       const appName = `ERS-${selectedPlatform}-${selectedVersion}`;
       const fileExt = selectedFile.name.split('.').pop();
@@ -68,6 +74,7 @@ const AddModal = ({ isOpen, onClose, onAdd }) => {
       setSelectedFile(null);
       setShowConfirmation(false);
       setError('');
+      setIsLoading(false);
       onClose();
     } catch (err) {
       setError('Failed to upload. Please try again.');
@@ -255,9 +262,21 @@ const AddModal = ({ isOpen, onClose, onAdd }) => {
                 </button>
                 <button
                   onClick={confirmAdd}
-                  className="px-4 py-2 text-white bg-green-600 rounded-md hover:bg-green-700 transition-colors duration-200"
+                  disabled={isLoading}
+                  className={`px-4 py-2 text-white rounded-md transition-colors duration-200 ${
+                    isLoading
+                      ? 'bg-gray-400 cursor-not-allowed'
+                      : 'bg-green-600 hover:bg-green-700'
+                  }`}
                 >
-                  Confirm Add
+                  {isLoading ? (
+                    <span className="flex items-center justify-center">
+                      <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></span>
+                      Adding...
+                    </span>
+                  ) : (
+                    'Confirm Add'
+                  )}
                 </button>
               </div>
             </div>

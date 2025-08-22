@@ -18,17 +18,6 @@ const AddModal = ({ isOpen, onClose, onAdd }) => {
   const [filteredVersions, setFilteredVersions] = useState([]);
 
   const platforms = ['Windows', 'macOS', 'Linux'];
-  const versions = [
-    'v1', 'v1.1', 'v1.2', 'v1.3', 'v1.4', 'v1.5',
-    'v2', 'v2.1', 'v2.2', 'v2.3', 'v2.4', 'v2.5',
-    'v3', 'v3.1', 'v3.2', 'v3.3', 'v3.4', 'v3.5',
-    'v4', 'v4.1', 'v4.2', 'v4.3', 'v4.4', 'v4.5',
-    'v5', 'v5.1', 'v5.2', 'v5.3', 'v5.4', 'v5.5',
-    'v6', 'v6.1', 'v6.2', 'v6.3', 'v6.4', 'v6.5',
-    'v7', 'v7.1', 'v7.2', 'v7.3', 'v7.4', 'v7.5',
-    'v8', 'v8.1', 'v8.2', 'v8.3', 'v8.4', 'v8.5',
-    'v9', 'v9.1', 'v9.2', 'v9.3', 'v9.4', 'v9.5'
-  ];
 
   const getTodayDate = () => {
     const today = new Date();
@@ -38,72 +27,66 @@ const AddModal = ({ isOpen, onClose, onAdd }) => {
     return `${year}-${month}-${day}`;
   };
 
-  const getNextVersions = (platform) => {
-    // Get all versions for the selected platform from table data
-    const platformVersions = tableData
-      .filter(item => item.platform === platform)
-      .map(item => item.version)
-      .sort();
-    
-    if (platformVersions.length === 0) {
-      // If no versions exist for this platform, only suggest v1
-      return ['v1'];
-    }
-    
-    // Get the highest version for this platform
-    const highestVersion = platformVersions[platformVersions.length - 1];
-    
-    // Extract version numbers (e.g., v3 -> 3, v2.1 -> 2.1)
-    const versionMatch = highestVersion.match(/v(\d+)(?:\.(\d+))?/);
-    if (!versionMatch) return ['v1'];
-    
-    const majorVersion = parseInt(versionMatch[1]);
-    const minorVersion = versionMatch[2] ? parseInt(versionMatch[2]) : 0;
-    
-    const suggestions = [];
-    
-    // If the highest version is a whole number (e.g., v3), suggest v3.1 to v3.9
-    if (minorVersion === 0) {
-      for (let i = 1; i <= 9; i++) {
-        suggestions.push(`v${majorVersion}.${i}`);
-      }
-      // Also suggest next major version
-      suggestions.push(`v${majorVersion + 1}`);
-    } else {
-      // If the highest version has decimal (e.g., v2.1), suggest remaining decimals
-      if (minorVersion < 9) {
-        for (let i = minorVersion + 1; i <= 9; i++) {
-          suggestions.push(`v${majorVersion}.${i}`);
+  // Fetch versions for the selected platform from Firestore
+  const fetchPlatformVersions = async (platform) => {
+    try {
+      const querySnapshot = await getDocs(collection(db, "installers"));
+      const versions = [];
+      querySnapshot.forEach((doc) => {
+        const data = doc.data();
+        if (data.platform === platform && typeof data.version === 'string') {
+          versions.push(data.version);
         }
-      }
-      // Always suggest next major version
-      suggestions.push(`v${majorVersion + 1}`);
+      });
+      return versions;
+    } catch (error) {
+      console.error("Error fetching versions:", error);
+      return [];
     }
-    
-    // Remove duplicates and return unique versions
+  };
+
+  // Compute the next version suggestions based on the highest version
+  const getNextVersions = (platform, versions) => {
+    if (!versions.length) return ['v1'];
+    // Find the highest version
+    const sorted = versions
+      .filter(v => /^v\d+(\.\d+)?$/.test(v))
+      .sort((a, b) => {
+        const [aMajor, aMinor = 0] = a.slice(1).split('.').map(Number);
+        const [bMajor, bMinor = 0] = b.slice(1).split('.').map(Number);
+        return aMajor !== bMajor ? aMajor - bMajor : aMinor - bMinor;
+      });
+    const highest = sorted[sorted.length - 1];
+    const match = highest.match(/^v(\d+)(?:\.(\d+))?$/);
+    if (!match) return ['v1'];
+    const major = parseInt(match[1]);
+    const minor = match[2] ? parseInt(match[2]) : 0;
+    const suggestions = [];
+    if (minor === 0) {
+      for (let i = 1; i <= 9; i++) suggestions.push(`v${major}.${i}`);
+      suggestions.push(`v${major + 1}`);
+    } else {
+      if (minor < 9) {
+        for (let i = minor + 1; i <= 9; i++) suggestions.push(`v${major}.${i}`);
+      }
+      suggestions.push(`v${major + 1}`);
+    }
     return [...new Set(suggestions)];
   };
 
-  const getNextVersion = (platform) => {
-    const nextVersions = getNextVersions(platform);
-    return nextVersions[0]; // Return the first (most logical) next version
-  };
-
-  const handlePlatformChange = (platform) => {
+  // When platform changes, fetch versions and update suggestions
+  const handlePlatformChange = async (platform) => {
     setSelectedPlatform(platform);
-    
+    setSelectedVersion('v'); // Always start with 'v'
+    setFilteredVersions([]);
+    setShowVersionSuggestions(false);
+
     if (platform) {
-      // Automatically set the next suggested version
-      const nextVersion = getNextVersion(platform);
-      setSelectedVersion(nextVersion);
-      
-      const nextVersions = getNextVersions(platform);
+      const versions = await fetchPlatformVersions(platform);
+      const nextVersions = getNextVersions(platform, versions);
       setFilteredVersions(nextVersions);
       setShowVersionSuggestions(true);
-    } else {
-      setSelectedVersion('');
-      setFilteredVersions([]);
-      setShowVersionSuggestions(false);
+      setSelectedVersion(nextVersions[0] || 'v');
     }
   };
 
@@ -121,26 +104,16 @@ const AddModal = ({ isOpen, onClose, onAdd }) => {
     setShowConfirmation(true);
   };
 
+  // Prevent deleting the 'v' prefix in the version input
   const handleVersionChange = (e) => {
-    const value = e.target.value;
+    let value = e.target.value;
+    if (!value.startsWith('v')) value = 'v' + value.replace(/^v*/, '');
+    if (value === '') value = 'v';
     setSelectedVersion(value);
-    
-    if (value.trim() === '') {
-      if (selectedPlatform) {
-        const nextVersions = getNextVersions(selectedPlatform);
-        setFilteredVersions(nextVersions);
-        setShowVersionSuggestions(true);
-      } else {
-        setFilteredVersions([]);
-        setShowVersionSuggestions(false);
-      }
-      return;
-    }
-    
-    // Filter from the suggested versions for the selected platform
-    const platformVersions = getNextVersions(selectedPlatform);
-    const filtered = platformVersions.filter(version => 
-      version.toLowerCase().includes(value.toLowerCase())
+
+    // Filter suggestions
+    const filtered = filteredVersions.filter(version =>
+      version.toLowerCase().startsWith(value.toLowerCase())
     );
     setFilteredVersions(filtered);
     setShowVersionSuggestions(filtered.length > 0);
@@ -259,17 +232,8 @@ const AddModal = ({ isOpen, onClose, onAdd }) => {
               type="text"
               value={selectedVersion}
               onChange={handleVersionChange}
-              onFocus={() => {
-                if (selectedPlatform) {
-                  const nextVersions = getNextVersions(selectedPlatform);
-                  setFilteredVersions(nextVersions);
-                  setShowVersionSuggestions(true);
-                }
-              }}
-              onBlur={() => {
-                // Delay hiding suggestions to allow clicking on them
-                setTimeout(() => setShowVersionSuggestions(false), 200);
-              }}
+              onFocus={() => setShowVersionSuggestions(true)}
+              onBlur={() => setTimeout(() => setShowVersionSuggestions(false), 200)}
               placeholder={selectedPlatform ? `Type version for ${selectedPlatform}` : "Select platform first"}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black"
             />

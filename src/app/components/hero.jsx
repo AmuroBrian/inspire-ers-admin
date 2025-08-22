@@ -2,47 +2,45 @@
 
 import React, { useState, useEffect } from 'react';
 import AddModal from './add';
+import { collection, getDocs, addDoc, deleteDoc, doc } from 'firebase/firestore';
+import { db } from '@/firebase/firebaseConfig';
+import { storage } from '@/firebase/firebaseConfig';
+import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 
 const Hero = () => {
   const [activeFilter, setActiveFilter] = useState('all');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
-  const [deleteConfirmation, setDeleteConfirmation] = useState({ show: false, id: null, name: '' });
+  const [deleteConfirmation, setDeleteConfirmation] = useState({ show: false, item: null });
+  const [tableData, setTableData] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
   const itemsPerPage = 10;
-  
-  // Default data - same for server and client
-  const defaultData = [
-    { id: 1, name: 'ERS Alorica', platform: 'Windows', version: '2.1.0', status: 'Active', lastUpdate: '2024-12-19' },
-    { id: 2, name: 'ERS Alorica macOS', platform: 'macOS', version: '1.8.2', status: 'Active', lastUpdate: '2024-12-19' },
-    { id: 3, name: 'ERS Concentrix Linux', platform: 'Linux', version: '3.0.1', status: 'Active', lastUpdate: '2024-12-19' },
-    { id: 4, name: 'ERS Concentrix', platform: 'Windows', version: '2.0.5', status: 'Inactive', lastUpdate: '2024-12-19' },
-    { id: 5, name: 'ERS Concentrix macOS', platform: 'macOS', version: '1.9.0', status: 'Active', lastUpdate: '2024-12-19' },
-    { id: 6, name: 'ERS Teleperformance Linux', platform: 'Linux', version: '2.9.8', status: 'Active', lastUpdate: '2024-12-19' },
-    { id: 7, name: 'ERS Teleperformance', platform: 'Windows', version: '2.2.0', status: 'Active', lastUpdate: '2024-12-19' },
-    { id: 8, name: 'ERS Teleperformance macOS', platform: 'macOS', version: '1.7.5', status: 'Inactive', lastUpdate: '2024-12-19' },
-    { id: 9, name: 'ERS Alorica Linux', platform: 'Linux', version: '3.1.2', status: 'Active', lastUpdate: '2024-12-19' },
-  ];
 
-  const [tableData, setTableData] = useState(defaultData);
-
-  // Load data from localStorage after component mounts
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const savedData = localStorage.getItem('ersTableData');
-      if (savedData) {
-        try {
-          const parsedData = JSON.parse(savedData);
-          setTableData(parsedData);
-        } catch (error) {
-          console.error('Error parsing localStorage data:', error);
-          setTableData(defaultData);
-        }
-      }
+  // Function to fetch data from Firestore
+  const fetchInstallers = async () => {
+    setIsLoading(true);
+    try {
+      const querySnapshot = await getDocs(collection(db, 'installers'));
+      const fetchedData = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+      setTableData(fetchedData);
+    } catch (error) {
+      console.error('Error fetching data:', error);
+      // You can handle this error, e.g., show an alert
+    } finally {
+      setIsLoading(false);
     }
+  };
+
+  // Fetch data on component mount
+  useEffect(() => {
+    fetchInstallers();
   }, []);
 
-  const filteredData = activeFilter === 'all' 
-    ? tableData 
+  const filteredData = activeFilter === 'all'
+    ? tableData
     : tableData.filter(item => item.platform === activeFilter);
 
   // Pagination calculations
@@ -51,10 +49,10 @@ const Hero = () => {
   const endIndex = startIndex + itemsPerPage;
   const currentData = filteredData.slice(startIndex, endIndex);
 
-  // Reset to first page when filter changes
+  // Reset to first page when filter or data changes
   useEffect(() => {
     setCurrentPage(1);
-  }, [activeFilter]);
+  }, [activeFilter, tableData]);
 
   // Function to get today's date in YYYY-MM-DD format
   const getTodayDate = () => {
@@ -65,31 +63,34 @@ const Hero = () => {
     return `${year}-${month}-${day}`;
   };
 
-  // Function to save data to localStorage
-  const saveToLocalStorage = (data) => {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('ersTableData', JSON.stringify(data));
-    }
-  };
-
-  // Function to handle upload and update last update date
-  const handleUpload = (id) => {
-    const updatedData = tableData.map(item => 
-      item.id === id 
-        ? { ...item, lastUpdate: getTodayDate() }
-        : item
-    );
-    setTableData(updatedData);
-    saveToLocalStorage(updatedData);
-  };
-
   // Function to handle adding new application
-  const handleAddApplication = (newApp) => {
-    const newApplication = { id: Date.now(), ...newApp }; // Simple ID generation
-    const updatedData = [newApplication, ...tableData];
-    setTableData(updatedData);
-    saveToLocalStorage(updatedData);
-    setCurrentPage(1);
+  const handleAddApplication = async (newApp) => {
+    setIsLoading(true);
+    try {
+      let downloadURL = '';
+      if (newApp.file) {
+        const storageRef = ref(storage, `installers/${newApp.file.name}`);
+        const snapshot = await uploadBytes(storageRef, newApp.file);
+        downloadURL = await getDownloadURL(snapshot.ref);
+      }
+
+      const appData = {
+        name: newApp.name,
+        platform: newApp.platform,
+        version: newApp.version,
+        lastUpdate: getTodayDate(),
+        downloadURL: downloadURL,
+        fileName: newApp.file ? newApp.file.name : '',
+      };
+
+      await addDoc(collection(db, 'installers'), appData);
+      fetchInstallers(); // Re-fetch data to update the table
+      setIsAddModalOpen(false);
+    } catch (error) {
+      console.error('Error adding application:', error);
+      // Handle the error appropriately
+      setIsLoading(false);
+    }
   };
 
   // Function to handle deleting an application
@@ -97,18 +98,24 @@ const Hero = () => {
     setDeleteConfirmation({ show: true, item });
   };
 
-  const confirmDelete = () => {
+  const confirmDelete = async () => {
     const { item } = deleteConfirmation;
-    const updatedData = tableData.filter((i) => i.id !== item.id);
-    setTableData(updatedData);
-    saveToLocalStorage(updatedData);
+    try {
+      // Delete the file from Firebase Storage
+      if (item.fileName) {
+        const fileRef = ref(storage, `installers/${item.fileName}`);
+        await deleteObject(fileRef);
+      }
 
-    // Adjust current page if needed
-    const newTotalPages = Math.ceil(updatedData.length / itemsPerPage);
-    if (currentPage > newTotalPages && newTotalPages > 0) {
-      setCurrentPage(newTotalPages);
+      // Delete the document from Firestore
+      await deleteDoc(doc(db, 'installers', item.id));
+
+      fetchInstallers(); // Re-fetch data to update the table
+      setDeleteConfirmation({ show: false, item: null });
+    } catch (error) {
+      console.error('Error deleting application:', error);
+      setDeleteConfirmation({ show: false, item: null });
     }
-    setDeleteConfirmation({ show: false, item: null });
   };
 
   const cancelDelete = () => {
@@ -132,6 +139,15 @@ const Hero = () => {
     }
   };
 
+  if (isLoading) {
+    return (
+      <div className="flex justify-center items-center min-h-screen">
+        <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-blue-500"></div>
+        <div className="ml-4 text-gray-700 font-semibold">Loading applications...</div>
+      </div>
+    );
+  }
+
   return (
     <section className="bg-gradient-to-br from-blue-50 via-blue-100 to-blue-200 py-32 px-4 min-h-screen flex items-center">
       <div className="max-w-7xl mx-auto text-center w-full">
@@ -139,52 +155,51 @@ const Hero = () => {
           <h1 className="text-5xl md:text-7xl font-bold text-gray-800 mb-8">
             Welcome to ERS Admin
           </h1>
-         
         </div>
-        
+
         <div className="flex flex-col sm:flex-row gap-6 justify-center items-center mb-20">
- 
+          {/* Your other components */}
         </div>
 
         {/* Platform Filter Buttons */}
         <div className="mb-8">
           <h2 className="text-3xl font-bold text-gray-800 mb-6">Application Management</h2>
           <div className="flex flex-wrap gap-4 mb-6">
-            <button 
+            <button
               onClick={() => setActiveFilter('all')}
               className={`px-6 py-3 rounded-lg font-semibold transition-all duration-200 ${
-                activeFilter === 'all' 
-                  ? 'bg-gray-700 text-white shadow-lg' 
+                activeFilter === 'all'
+                  ? 'bg-gray-700 text-white shadow-lg'
                   : 'bg-white text-gray-700 border-2 border-gray-300 hover:border-gray-500'
               }`}
             >
               All Platforms
             </button>
-            <button 
+            <button
               onClick={() => setActiveFilter('Windows')}
               className={`px-6 py-3 rounded-lg font-semibold transition-all duration-200 ${
-                activeFilter === 'Windows' 
-                  ? 'bg-blue-600 text-white shadow-lg' 
+                activeFilter === 'Windows'
+                  ? 'bg-blue-600 text-white shadow-lg'
                   : 'bg-white text-blue-600 border-2 border-blue-300 hover:border-blue-500'
               }`}
             >
               Windows
             </button>
-            <button 
+            <button
               onClick={() => setActiveFilter('macOS')}
               className={`px-6 py-3 rounded-lg font-semibold transition-all duration-200 ${
-                activeFilter === 'macOS' 
-                  ? 'bg-gray-800 text-white shadow-lg' 
+                activeFilter === 'macOS'
+                  ? 'bg-gray-800 text-white shadow-lg'
                   : 'bg-white text-gray-800 border-2 border-gray-400 hover:border-gray-600'
               }`}
             >
               macOS
             </button>
-            <button 
+            <button
               onClick={() => setActiveFilter('Linux')}
               className={`px-6 py-3 rounded-lg font-semibold transition-all duration-200 ${
-                activeFilter === 'Linux' 
-                  ? 'bg-orange-600 text-white shadow-lg' 
+                activeFilter === 'Linux'
+                  ? 'bg-orange-600 text-white shadow-lg'
                   : 'bg-white text-orange-600 border-2 border-orange-300 hover:border-orange-500'
               }`}
             >
@@ -310,7 +325,7 @@ const Hero = () => {
             <div className="bg-white/95 backdrop-blur-md rounded-lg p-6 w-80 max-w-sm shadow-2xl border border-white/20">
               <h3 className="text-lg font-bold text-gray-800 mb-4">Confirm Deletion</h3>
               <p className="text-gray-700 mb-6">
-                Are you sure you want to delete "{deleteConfirmation.item?.name}"? This action cannot be undone.
+                Are you sure you want to delete &quot;{deleteConfirmation.item?.name}&quot;? This action cannot be undone.
               </p>
               <div className="flex justify-end gap-2">
                 <button

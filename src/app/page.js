@@ -7,6 +7,7 @@ export default function Home() {
     <div className="font-sans min-h-screen bg-white flex flex-col">
       <Header />
       <Hero />
+     
     </div>
   );
 }

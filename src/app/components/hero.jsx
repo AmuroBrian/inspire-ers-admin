@@ -153,7 +153,7 @@ const Hero = () => {
       <div className="max-w-7xl mx-auto text-center w-full">
         <div className="mb-16">
           <h1 className="text-5xl md:text-7xl font-bold text-gray-800 mb-8">
-            Welcome to ERS Admin
+            Welcome to Inspire
           </h1>
         </div>
 
@@ -163,7 +163,7 @@ const Hero = () => {
 
         {/* Platform Filter Buttons */}
         <div className="mb-8">
-          <h2 className="text-3xl font-bold text-gray-800 mb-6">Application Management</h2>
+          <h2 className="text-3xl font-bold text-gray-800 mb-6">Employee Record System</h2>
           <div className="flex flex-wrap gap-4 mb-6">
             <button
               onClick={() => setActiveFilter('all')}

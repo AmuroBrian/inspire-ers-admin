@@ -171,6 +171,11 @@ const AddModal = ({ isOpen, onClose, onAdd }) => {
         fileUrl: fileUrl
       });
 
+      // Notify parent to refresh and close modal
+      if (onAdd) {
+        onAdd(); // No need to pass data, just trigger refresh
+      }
+
       // Reset state
       setSelectedPlatform('');
       setSelectedVersion('');

@@ -64,33 +64,13 @@ const Hero = () => {
   };
 
   // Function to handle adding new application
-  const handleAddApplication = async (newApp) => {
-    setIsLoading(true);
-    try {
-      let downloadURL = '';
-      if (newApp.file) {
-        const storageRef = ref(storage, `installers/${newApp.file.name}`);
-        const snapshot = await uploadBytes(storageRef, newApp.file);
-        downloadURL = await getDownloadURL(snapshot.ref);
-      }
+  const handleAddApplication = async () => {
+    // Just refresh data and close modal
+    await fetchInstallers();
+    setIsAddModalOpen(false);
 
-      const appData = {
-        name: newApp.name,
-        platform: newApp.platform,
-        version: newApp.version,
-        lastUpdate: getTodayDate(),
-        downloadURL: downloadURL,
-        fileName: newApp.file ? newApp.file.name : '',
-      };
-
-      await addDoc(collection(db, 'installers'), appData);
-      fetchInstallers(); // Re-fetch data to update the table
-      setIsAddModalOpen(false);
-    } catch (error) {
-      console.error('Error adding application:', error);
-      // Handle the error appropriately
-      setIsLoading(false);
-    }
+    // Optionally, force a full page reload:
+    // window.location.reload();
   };
 
   // Function to handle deleting an application

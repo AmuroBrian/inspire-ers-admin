@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
-import { collection, getDocs } from "firebase/firestore";
+import React, { useEffect, useState, useRef } from 'react';
+import { collection, getDocs, addDoc } from "firebase/firestore";
 import { db } from '@/firebase/firebaseConfig';
 import { storage } from '@/firebase/firebaseConfig';
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
@@ -16,6 +16,9 @@ const AddModal = ({ isOpen, onClose, onAdd }) => {
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [showVersionSuggestions, setShowVersionSuggestions] = useState(false);
   const [filteredVersions, setFilteredVersions] = useState([]);
+  
+  // Add a ref to track if the operation is in progress
+  const isProcessing = useRef(false);
 
   const platforms = ['Windows', 'macOS', 'Linux'];
 
@@ -26,6 +29,18 @@ const AddModal = ({ isOpen, onClose, onAdd }) => {
     const day = String(today.getDate()).padStart(2, '0');
     return `${year}-${month}-${day}`;
   };
+
+  // Reset state when modal closes
+  useEffect(() => {
+    if (!isOpen) {
+      setSelectedPlatform('');
+      setSelectedVersion('');
+      setSelectedFile(null);
+      setError('');
+      setShowConfirmation(false);
+      isProcessing.current = false;
+    }
+  }, [isOpen]);
 
   // Fetch versions for the selected platform from Firestore
   const fetchPlatformVersions = async (platform) => {
@@ -77,7 +92,7 @@ const AddModal = ({ isOpen, onClose, onAdd }) => {
   // When platform changes, fetch versions and update suggestions
   const handlePlatformChange = async (platform) => {
     setSelectedPlatform(platform);
-    setSelectedVersion('v'); // Always start with 'v'
+    setSelectedVersion('v');
     setFilteredVersions([]);
     setShowVersionSuggestions(false);
 
@@ -125,11 +140,11 @@ const AddModal = ({ isOpen, onClose, onAdd }) => {
   };
 
   const confirmAdd = async () => {
-
+    if (isProcessing.current) return;
+    
     setError('');
     setIsLoading(true);
-
-    await new Promise(resolve => setTimeout(resolve, 1500));
+    isProcessing.current = true;
 
     try {
       const appName = `ERS-${selectedPlatform}-${selectedVersion}`;
@@ -140,10 +155,13 @@ const AddModal = ({ isOpen, onClose, onAdd }) => {
         `installer-versions/${selectedPlatform.toLowerCase()}/${newFileName}`
       );
       const renamedFile = new File([selectedFile], newFileName, { type: selectedFile.type });
+      
+      // Upload file to storage
       await uploadBytes(storageRef, renamedFile);
       const fileUrl = await getDownloadURL(storageRef);
 
-      onAdd({
+      // Save to Firestore
+      const docRef = await addDoc(collection(db, "installers"), {
         name: appName,
         platform: selectedPlatform,
         version: selectedVersion,
@@ -153,17 +171,24 @@ const AddModal = ({ isOpen, onClose, onAdd }) => {
         fileUrl: fileUrl
       });
 
+      // Notify parent to refresh and close modal
+      if (onAdd) {
+        onAdd(); // No need to pass data, just trigger refresh
+      }
+
+      // Reset state
       setSelectedPlatform('');
       setSelectedVersion('');
       setSelectedFile(null);
       setShowConfirmation(false);
       setError('');
-      setIsLoading(false);
-      onClose();
+      
     } catch (err) {
       setError('Failed to upload. Please try again.');
-      setShowConfirmation(false);
       console.error(err);
+    } finally {
+      setIsLoading(false);
+      isProcessing.current = false;
     }
   };
 
@@ -185,8 +210,10 @@ const AddModal = ({ isOpen, onClose, onAdd }) => {
       }
     };
 
-    fetchData();
-  }, []);
+    if (isOpen) {
+      fetchData();
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -198,6 +225,7 @@ const AddModal = ({ isOpen, onClose, onAdd }) => {
           <button
             onClick={onClose}
             className="text-gray-500 hover:text-gray-700 text-2xl font-bold"
+            disabled={isLoading}
           >
             ×
           </button>
@@ -213,6 +241,7 @@ const AddModal = ({ isOpen, onClose, onAdd }) => {
               value={selectedPlatform}
               onChange={(e) => handlePlatformChange(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black"
+              disabled={isLoading}
             >
               <option value="" className="text-black">Select Platform</option>
               {platforms.map((platform) => (
@@ -236,6 +265,7 @@ const AddModal = ({ isOpen, onClose, onAdd }) => {
               onBlur={() => setTimeout(() => setShowVersionSuggestions(false), 200)}
               placeholder={selectedPlatform ? `Type version for ${selectedPlatform}` : "Select platform first"}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black"
+              disabled={isLoading}
             />
             
             {/* Version Suggestions Dropdown */}
@@ -266,6 +296,7 @@ const AddModal = ({ isOpen, onClose, onAdd }) => {
                 accept=".exe,.dmg,.deb,.rpm,.app,.apk,.ipa"
                 className="hidden"
                 id="file-upload"
+                disabled={isLoading}
               />
               <label htmlFor="file-upload" className="cursor-pointer">
                 {selectedFile ? (
@@ -310,14 +341,15 @@ const AddModal = ({ isOpen, onClose, onAdd }) => {
           <button
             onClick={onClose}
             className="px-4 py-2 text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300 transition-colors duration-200"
+            disabled={isLoading}
           >
             Cancel
           </button>
           <button
             onClick={handleSubmit}
-            disabled={!selectedPlatform || !selectedVersion || !selectedFile}
+            disabled={!selectedPlatform || !selectedVersion || !selectedFile || isLoading}
             className={`px-4 py-2 text-white rounded-md transition-colors duration-200 ${
-              selectedPlatform && selectedVersion && selectedFile
+              selectedPlatform && selectedVersion && selectedFile && !isLoading
                 ? 'bg-blue-600 hover:bg-blue-700'
                 : 'bg-gray-400 cursor-not-allowed'
             }`}
@@ -353,6 +385,7 @@ const AddModal = ({ isOpen, onClose, onAdd }) => {
                 <button
                   onClick={cancelConfirmation}
                   className="px-4 py-2 text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300 transition-colors duration-200"
+                  disabled={isLoading}
                 >
                   Cancel
                 </button>

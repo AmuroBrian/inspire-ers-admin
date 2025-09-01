@@ -83,7 +83,7 @@ const Hero = () => {
     try {
       // Delete the file from Firebase Storage
       if (item.fileName) {
-        const fileRef = ref(storage, `installers/${item.fileName}`);
+        const fileRef = ref(storage, `installer-versions/${item.platform.toLowerCase()}/${item.fileName}`);
         await deleteObject(fileRef);
       }
 

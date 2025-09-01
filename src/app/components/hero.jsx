@@ -81,16 +81,14 @@ const Hero = () => {
   const confirmDelete = async () => {
     const { item } = deleteConfirmation;
     try {
-      // Delete the file from Firebase Storage
       if (item.fileName) {
-        const fileRef = ref(storage, `installers/${item.fileName}`);
+        const fileRef = ref(storage, `installer-versions/${item.platform.toLowerCase()}/${item.fileName}`);
         await deleteObject(fileRef);
       }
 
-      // Delete the document from Firestore
       await deleteDoc(doc(db, 'installers', item.id));
 
-      fetchInstallers(); // Re-fetch data to update the table
+      fetchInstallers(); 
       setDeleteConfirmation({ show: false, item: null });
     } catch (error) {
       console.error('Error deleting application:', error);

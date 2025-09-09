@@ -2,10 +2,10 @@
 
 import React, { useState, useEffect } from 'react';
 import AddModal from './add';
-import { collection, getDocs, addDoc, deleteDoc, doc } from 'firebase/firestore';
+import { collection, getDocs, deleteDoc, doc } from 'firebase/firestore';
 import { db } from '@/firebase/firebaseConfig';
 import { storage } from '@/firebase/firebaseConfig';
-import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
+import { ref, deleteObject } from 'firebase/storage';
 
 const Hero = () => {
   const [activeFilter, setActiveFilter] = useState('all');
@@ -16,7 +16,6 @@ const Hero = () => {
   const [isLoading, setIsLoading] = useState(true);
   const itemsPerPage = 10;
 
-  // Function to fetch data from Firestore
   const fetchInstallers = async () => {
     setIsLoading(true);
     try {
@@ -28,13 +27,11 @@ const Hero = () => {
       setTableData(fetchedData);
     } catch (error) {
       console.error('Error fetching data:', error);
-      // You can handle this error, e.g., show an alert
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Fetch data on component mount
   useEffect(() => {
     fetchInstallers();
   }, []);
@@ -43,68 +40,47 @@ const Hero = () => {
     ? tableData
     : tableData.filter(item => item.platform === activeFilter);
 
-  // Pagination calculations
   const totalPages = Math.ceil(filteredData.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
   const currentData = filteredData.slice(startIndex, endIndex);
 
-  // Reset to first page when filter or data changes
   useEffect(() => {
     setCurrentPage(1);
   }, [activeFilter, tableData]);
 
-  // Function to get today's date in YYYY-MM-DD format
-  const getTodayDate = () => {
-    const today = new Date();
-    const year = today.getFullYear();
-    const month = String(today.getMonth() + 1).padStart(2, '0');
-    const day = String(today.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-  };
-
-  // Function to handle adding new application
   const handleAddApplication = async () => {
-    // Just refresh data and close modal
     await fetchInstallers();
     setIsAddModalOpen(false);
-
-    // Optionally, force a full page reload:
-    // window.location.reload();
   };
 
-  // Function to handle deleting an application
   const handleDeleteApplication = (item) => {
     setDeleteConfirmation({ show: true, item });
   };
 
-  const confirmDelete = async () => {
-    const { item } = deleteConfirmation;
-    try {
-      // Delete the file from Firebase Storage
-      if (item.fileName) {
-        const fileRef = ref(storage, `installer-versions/${item.platform.toLowerCase()}/${item.fileName}`);
-        await deleteObject(fileRef);
-      }
-
-      // Delete the document from Firestore
-      await deleteDoc(doc(db, 'installers', item.id));
-
-      fetchInstallers(); // Re-fetch data to update the table
-      setDeleteConfirmation({ show: false, item: null });
-    } catch (error) {
-      console.error('Error deleting application:', error);
-      setDeleteConfirmation({ show: false, item: null });
+const confirmDelete = async () => {
+  const { item } = deleteConfirmation;
+  try {
+    if (item.fileName && item.platform) {
+      const fileRef = ref(
+        storage,
+        `installer-versions/${item.platform.toLowerCase()}/${item.fileName}`
+      );
+      await deleteObject(fileRef);
     }
-  };
+
+    await deleteDoc(doc(db, 'installers', item.id));
+
+    fetchInstallers();
+    setDeleteConfirmation({ show: false, item: null });
+  } catch (error) {
+    console.error('Error deleting application:', error);
+    setDeleteConfirmation({ show: false, item: null });
+  }
+};
 
   const cancelDelete = () => {
     setDeleteConfirmation({ show: false, item: null });
-  };
-
-  // Pagination navigation functions
-  const goToPage = (page) => {
-    setCurrentPage(page);
   };
 
   const goToNextPage = () => {
